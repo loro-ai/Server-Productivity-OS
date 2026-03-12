@@ -74,7 +74,7 @@ const toggleHabit = async (req, res, next) => {
       return res.status(404).json({ message: 'Hábito no encontrado' })
     }
 
-    const targetDate = new Date(date + 'T00:00:00.000Z')
+    const targetDate = new Date(date + 'T12:00:00.000Z')
 
     const existingIndex = habit.weekData.findIndex((d) => {
       return new Date(d.date).toISOString().split('T')[0] === date
