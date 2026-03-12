@@ -18,22 +18,19 @@ const errorMiddleware = require('./middleware/error.middleware')
 
 const app = express()
 
-// ─── V-14: CORS con validación dinámica de origins ─────────────
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : [process.env.CLIENT_URL || 'http://localhost:5173']
+// ─── V-14: Configuracion de CORS  ─────────────
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Permitir requests sin origin (ej: mobile apps, curl, Postman en dev)
-      if (!origin) return callback(null, true)
-      if (allowedOrigins.includes(origin)) return callback(null, true)
-      callback(new Error(`CORS: origin no permitido — ${origin}`))
-    },
-    credentials: true,
-  })
-)
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || origin.includes('vercel.app') || origin === 'http://localhost:5173') {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true,
+}))
+
 
 // ─── V-12: Security headers — mitiga XSS y clickjacking ────────
 app.use((req, res, next) => {
