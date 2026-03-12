@@ -1,6 +1,10 @@
 require('dotenv').config()
+const validateEnv = require('./src/config/validateEnv')
 const app = require('./src/app')
 const connectDB = require('./src/config/db')
+
+// Validar variables de entorno antes de arrancar
+validateEnv()
 
 const PORT = process.env.PORT || 3001
 

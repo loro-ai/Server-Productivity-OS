@@ -18,24 +18,43 @@ const errorMiddleware = require('./middleware/error.middleware')
 
 const app = express()
 
-// ─── Configuración de CORS ──────────────────────────────────────
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || origin.includes('vercel.app') || origin === 'http://localhost:5173') {
-      callback(null, true)
-    } else {
-      callback(new Error('Not allowed by CORS'))
-    }
-  },
-  credentials: true,
-}))
+// ─── V-14: CORS con validación dinámica de origins ─────────────
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+  : [process.env.CLIENT_URL || 'http://localhost:5173']
 
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Permitir requests sin origin (ej: mobile apps, curl, Postman en dev)
+      if (!origin) return callback(null, true)
+      if (allowedOrigins.includes(origin)) return callback(null, true)
+      callback(new Error(`CORS: origin no permitido — ${origin}`))
+    },
+    credentials: true,
+  })
+)
 
-// ─── Parseo de JSON y URL encoded ──────────────────────────────
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// ─── V-12: Security headers — mitiga XSS y clickjacking ────────
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'"
+  )
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  next()
+})
 
-// ─── Multer: configurado pero sin rutas activas (preparado para v2) ──
+// ─── V-09: Límite de tamaño en body (previene DoS) ─────────────
+app.use(express.json({ limit: '10kb' }))
+app.use(express.urlencoded({ extended: true, limit: '10kb' }))
+
+// ─── V-06: Multer con restricción de tipos y tamaño ────────────
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+const MAX_FILE_SIZE_MB = 5
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, '../uploads'))
@@ -45,8 +64,19 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + path.extname(file.originalname))
   },
 })
+
 // eslint-disable-next-line no-unused-vars
-const upload = multer({ storage })
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE_MB * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error(`Tipo de archivo no permitido: ${file.mimetype}`))
+    }
+  },
+})
 
 // ─── Rutas públicas (sin JWT) ───────────────────────────────────
 app.use('/api/auth', authRoutes)

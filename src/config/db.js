@@ -1,12 +1,10 @@
 const mongoose = require('mongoose')
 
+// Conexión a MongoDB con manejo de errores
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
-      tls: true,
-      tlsAllowInvalidCertificates: false,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      // Opciones recomendadas para Mongoose 8+
     })
     console.log(`✅ MongoDB conectado: ${conn.connection.host}`)
   } catch (error) {

@@ -36,9 +36,18 @@ const createProject = async (req, res, next) => {
 // PATCH /api/projects/:id
 const updateProject = async (req, res, next) => {
   try {
+    // Whitelist: solo campos que el cliente puede modificar
+    const { name, area, status, dueDate } = req.body
+    const allowedUpdate = {}
+
+    if (name !== undefined) allowedUpdate.name = name
+    if (area !== undefined) allowedUpdate.area = area
+    if (status !== undefined) allowedUpdate.status = status
+    if (dueDate !== undefined) allowedUpdate.dueDate = dueDate
+
     const project = await Project.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.id },
-      req.body,
+      allowedUpdate,
       { new: true, runValidators: true }
     )
 

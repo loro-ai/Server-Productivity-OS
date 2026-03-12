@@ -1,42 +1,40 @@
 const Task = require('../models/Task')
 const User = require('../models/User')
 
-// Actualizar streak del usuario al completar una tarea
+// V-16: updateStreak con operación atómica para evitar race condition
+// Usa findOneAndUpdate con condición en lastActiveDate en lugar de
+// dos operaciones separadas (findById + findByIdAndUpdate)
 const updateStreak = async (userId) => {
   try {
-    const user = await User.findById(userId)
-    if (!user) return
-
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const lastActive = user.lastActiveDate ? new Date(user.lastActiveDate) : null
-    if (lastActive) lastActive.setHours(0, 0, 0, 0)
-
-    const todayStr = today.toISOString().split('T')[0]
-    const lastStr = lastActive ? lastActive.toISOString().split('T')[0] : null
-
-    if (lastStr === todayStr) {
-      // Ya fue activo hoy, no cambiar streak
-      return
-    }
-
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = yesterday.toISOString().split('T')[0]
 
-    if (lastStr === yesterdayStr) {
-      // Actividad consecutiva: incrementar streak
-      await User.findByIdAndUpdate(userId, {
-        streak: user.streak + 1,
-        lastActiveDate: new Date(),
-      })
-    } else {
-      // Se rompió la racha: reiniciar a 1
-      await User.findByIdAndUpdate(userId, {
-        streak: 1,
-        lastActiveDate: new Date(),
-      })
+    // Caso 1: ya fue activo hoy → no hacer nada
+    const alreadyActiveToday = await User.findOne({
+      _id: userId,
+      lastActiveDate: { $gte: today },
+    })
+    if (alreadyActiveToday) return
+
+    // Caso 2: actividad consecutiva (lastActiveDate fue ayer) → incrementar atómicamente
+    const consecutive = await User.findOneAndUpdate(
+      {
+        _id: userId,
+        lastActiveDate: { $gte: yesterday, $lt: today },
+      },
+      { $inc: { streak: 1 }, $set: { lastActiveDate: new Date() } },
+      { new: true }
+    )
+
+    if (!consecutive) {
+      // Caso 3: racha rota → reiniciar a 1 atómicamente
+      await User.findOneAndUpdate(
+        { _id: userId },
+        { $set: { streak: 1, lastActiveDate: new Date() } }
+      )
     }
   } catch (err) {
     console.error('Error actualizando streak:', err.message)
@@ -95,9 +93,23 @@ const createTask = async (req, res, next) => {
 // PATCH /api/tasks/:id
 const updateTask = async (req, res, next) => {
   try {
+    // Whitelist: solo campos que el cliente puede modificar (V-02)
+    const { title, priority, dueDate, projectId, status } = req.body
+    const allowedUpdate = {}
+
+    if (title !== undefined) allowedUpdate.title = title
+    if (priority !== undefined) allowedUpdate.priority = priority
+    if (dueDate !== undefined) allowedUpdate.dueDate = dueDate
+    if (projectId !== undefined) allowedUpdate.projectId = projectId
+    if (status !== undefined) {
+      allowedUpdate.status = status
+      // Sincronizar completedAt al actualizar status (V-15)
+      allowedUpdate.completedAt = status === 'done' ? new Date() : null
+    }
+
     const task = await Task.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.id },
-      req.body,
+      allowedUpdate,
       { new: true, runValidators: true }
     )
 
@@ -138,13 +150,11 @@ const completeTask = async (req, res, next) => {
       return res.status(404).json({ message: 'Tarea no encontrada' })
     }
 
-    // Toggle entre pending y done
     const newStatus = task.status === 'pending' ? 'done' : 'pending'
     task.status = newStatus
     task.completedAt = newStatus === 'done' ? new Date() : null
     await task.save()
 
-    // Actualizar streak si se completó la tarea
     if (newStatus === 'done') {
       await updateStreak(req.user.id)
     }

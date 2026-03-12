@@ -1,6 +1,5 @@
 const mongoose = require('mongoose')
 
-// Modelo de usuario con streak y fecha de última actividad
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -19,7 +18,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'La contraseña es requerida'],
     },
-    // Días consecutivos con al menos 1 tarea completada
+    // 'admin' tiene acceso al manual técnico y futuras funciones de gestión
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+    },
     streak: {
       type: Number,
       default: 0,

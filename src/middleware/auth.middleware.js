@@ -11,9 +11,10 @@ const authMiddleware = (req, res, next) => {
 
   const token = authHeader.split(' ')[1]
 
+  // V-12: el token viaja en el header Authorization, nunca en cookies ni body
+  // Si en el futuro se migra a httpOnly cookies, este middleware se actualiza aquí
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    // Adjuntar datos del usuario al request para uso en controladores
     req.user = decoded
     next()
   } catch (error) {
