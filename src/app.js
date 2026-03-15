@@ -20,16 +20,19 @@ const app = express()
 
 // ─── V-14: Configuracion de CORS  ─────────────
 
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || origin.includes('vercel.app') || origin === 'http://localhost:5173') {
-      callback(null, true)
-    } else {
-      callback(new Error('Not allowed by CORS'))
-    }
-  },
-  credentials: true,
-}))
+origin: function(origin, callback) {
+  const permitidos = [
+    'http://localhost:5173',
+    'https://localhost',
+    'capacitor://localhost',
+    'http://localhost',
+  ]
+  if (!origin || origin.includes('vercel.app') || permitidos.includes(origin)) {
+    callback(null, true)
+  } else {
+    callback(new Error('Not allowed by CORS'))
+  }
+}
 
 
 // ─── V-12: Security headers — mitiga XSS y clickjacking ────────
